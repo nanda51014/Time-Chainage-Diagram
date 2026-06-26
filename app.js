@@ -53,8 +53,18 @@ function addWorkingDays(start, workDays) {
 // ---------- State ----------
 let activities = [];   // {id, name, discipline, fromCH, toCH, start, mode, value, dir}
 let markers = [];      // {id, ch, label}
+let deps = [];         // {id, predId, succId, minDays}
 let nextId = 1;
 let nextMkId = 1;
+let nextDepId = 1;
+
+// sample dependencies declared by activity name; resolved to ids on load.
+// Earthworks→Drainage is a near-miss (57 d gap vs 60 required) to show a
+// violation; Sub-base→Surfacing passes comfortably.
+const SAMPLE_DEPS = [
+  { pred: 'Earthworks', succ: 'Drainage', minDays: 60 },
+  { pred: 'Sub-base', succ: 'Surfacing', minDays: 14 }
+];
 
 const SAMPLE_MARKERS = [
   { ch: 4400, label: 'Bridge BR-04' },
@@ -100,6 +110,45 @@ function buildSchedule() {
     rows.push({ ...act, start, finish });
   }
   return rows;
+}
+
+// Date at which an activity's work-front reaches chainage `ch` (linear
+// interpolation along its line). Returns null for zero-length (vertical)
+// activities, where a single chainage maps to a date range, not a point.
+function dateAtCh(r, ch) {
+  if (r.toCH === r.fromCH) return null;
+  const frac = (ch - r.fromCH) / (r.toCH - r.fromCH);
+  return addDays(r.start, frac * diffDays(r.start, r.finish));
+}
+
+// Evaluate declared dependencies. A successor must stay at least `minDays`
+// behind its predecessor at every shared chainage. Both work-fronts are
+// linear in chainage, so the gap is linear and its minimum lies at an
+// endpoint of the shared chainage range — checking the endpoints suffices.
+function evalDeps(sched) {
+  const byId = {};
+  sched.forEach(r => { byId[r.id] = r; });
+  const out = [];
+  for (const d of deps) {
+    const p = byId[d.predId], s = byId[d.succId];
+    if (!p || !s) continue;
+    if (p.toCH === p.fromCH || s.toCH === s.fromCH) continue; // skip vertical
+    const lo = Math.max(Math.min(p.fromCH, p.toCH), Math.min(s.fromCH, s.toCH));
+    const hi = Math.min(Math.max(p.fromCH, p.toCH), Math.max(s.fromCH, s.toCH));
+    if (lo > hi) continue; // no shared chainage
+    const minDays = parseFloat(d.minDays) || 0;
+    let worst = null;
+    for (const ch of [lo, hi]) {
+      const pd = dateAtCh(p, ch), sd = dateAtCh(s, ch);
+      if (!pd || !sd) continue;
+      const gap = diffDays(pd, sd); // successor minus predecessor, in days
+      if (worst === null || gap < worst.gap) worst = { ch, gap, succDate: sd };
+    }
+    if (worst && worst.gap < minDays) {
+      out.push({ dep: d, pred: p, succ: s, minDays, ...worst });
+    }
+  }
+  return out;
 }
 
 // ============================================================
@@ -272,6 +321,35 @@ function render() {
   badge.textContent = clashN;
   badge.hidden = !(showClashes && clashN > 0);
 
+  // ----- dependency violations -----
+  const viols = evalDeps(sched);
+  for (const v of viols) {
+    const x = xOf(v.ch), y = yOf(v.succDate);
+    const d = 7;
+    const path = el('path', {
+      d: `M${x} ${y - d} L${x + d} ${y} L${x} ${y + d} L${x - d} ${y} Z`,
+      class: 'dep-marker'
+    });
+    const short = (v.minDays - v.gap);
+    path.addEventListener('mousemove', (ev) => {
+      const host = document.getElementById('chartHost').getBoundingClientRect();
+      tip.hidden = false;
+      tip.style.left = (ev.clientX - host.left + 14) + 'px';
+      tip.style.top = (ev.clientY - host.top + 14) + 'px';
+      const desc = v.gap < 0
+        ? `overtakes by ${-v.gap} d`
+        : `only ${v.gap} d behind (need ${v.minDays})`;
+      tip.innerHTML =
+        `<b>⚠ Buffer violation</b><br>${esc(v.succ.name)} vs ${esc(v.pred.name)}<br>` +
+        `at CH ${formatCh(v.ch)}: ${desc}<br>short by ${short.toFixed(0)} d`;
+    });
+    path.addEventListener('mouseleave', () => { tip.hidden = true; });
+    svg.appendChild(path);
+  }
+  const depBadge = document.getElementById('depCount');
+  depBadge.textContent = viols.length;
+  depBadge.hidden = viols.length === 0;
+
   // ----- legend -----
   const discs = Object.keys(disciplineColors);
   let lx = M.left + 6, ly = M.top + 6;
@@ -399,12 +477,14 @@ function renderTable() {
         if (f === 'fromCH' || f === 'toCH') v = parseFloat(v);
         act[f] = v;
         if (f === 'mode') renderTable(); // swap value input type
+        if (f === 'name') renderDepTable(); // keep dependency dropdowns in sync
         render();
       });
     });
     tr.querySelector('.del-btn').addEventListener('click', () => {
       activities = activities.filter(a => a.id !== act.id);
-      renderTable(); render();
+      deps = deps.filter(d => d.predId !== act.id && d.succId !== act.id);
+      renderTable(); renderDepTable(); render();
     });
     body.appendChild(tr);
   }
@@ -437,6 +517,52 @@ function renderMarkerTable() {
     });
     body.appendChild(tr);
   }
+}
+
+// ---------- dependencies table ----------
+function addDep(data) {
+  deps.push({
+    id: nextDepId++,
+    predId: data.predId != null ? data.predId : (activities[0] && activities[0].id),
+    succId: data.succId != null ? data.succId : (activities[0] && activities[0].id),
+    minDays: data.minDays != null ? data.minDays : 7
+  });
+}
+function activityOptions(selectedId) {
+  return activities.map(a =>
+    `<option value="${a.id}" ${a.id === selectedId ? 'selected' : ''}>${esc(a.name)}</option>`
+  ).join('');
+}
+function renderDepTable() {
+  const body = document.getElementById('depBody');
+  body.innerHTML = '';
+  for (const d of deps) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><select data-f="predId">${activityOptions(d.predId)}</select></td>
+      <td><select data-f="succId">${activityOptions(d.succId)}</select></td>
+      <td><input data-f="minDays" type="number" step="any" value="${d.minDays}" /></td>
+      <td><button class="del-btn" title="Delete">&times;</button></td>
+    `;
+    tr.querySelectorAll('[data-f]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const f = inp.dataset.f;
+        d[f] = f === 'minDays' ? parseFloat(inp.value) : parseInt(inp.value, 10);
+        render();
+      });
+    });
+    tr.querySelector('.del-btn').addEventListener('click', () => {
+      deps = deps.filter(x => x.id !== d.id);
+      renderDepTable(); render();
+    });
+    body.appendChild(tr);
+  }
+}
+// Resolve a name-based sample dependency to current activity ids.
+function resolveSampleDep(sd) {
+  const byName = n => { const a = activities.find(x => x.name === n); return a && a.id; };
+  const predId = byName(sd.pred), succId = byName(sd.succ);
+  if (predId && succId) addDep({ predId, succId, minDays: sd.minDays });
 }
 
 // ============================================================
@@ -561,17 +687,22 @@ function init() {
   document.getElementById('projStart').value = '2026-07-01';
 
   document.getElementById('addRow').addEventListener('click', () => {
-    addActivity({}); renderTable(); render();
+    addActivity({}); renderTable(); renderDepTable(); render();
   });
   document.getElementById('loadSample').addEventListener('click', () => {
     activities = []; nextId = 1;
     SAMPLE.forEach(addActivity);
     markers = []; nextMkId = 1;
     SAMPLE_MARKERS.forEach(addMarker);
-    renderTable(); renderMarkerTable(); render();
+    deps = []; nextDepId = 1;
+    SAMPLE_DEPS.forEach(resolveSampleDep);
+    renderTable(); renderMarkerTable(); renderDepTable(); render();
   });
   document.getElementById('addMarker').addEventListener('click', () => {
     addMarker({}); renderMarkerTable(); render();
+  });
+  document.getElementById('addDep').addEventListener('click', () => {
+    addDep({}); renderDepTable(); render();
   });
   document.getElementById('csvInput').addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -581,7 +712,9 @@ function init() {
       const rows = parseCSV(reader.result);
       activities = []; nextId = 1;
       rows.forEach(addActivity);
-      renderTable(); render();
+      deps = deps.filter(d =>
+        activities.some(a => a.id === d.predId) && activities.some(a => a.id === d.succId));
+      renderTable(); renderDepTable(); render();
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -600,8 +733,10 @@ function init() {
   // start with sample data so the user sees something immediately
   SAMPLE.forEach(addActivity);
   SAMPLE_MARKERS.forEach(addMarker);
+  SAMPLE_DEPS.forEach(resolveSampleDep);
   renderTable();
   renderMarkerTable();
+  renderDepTable();
   render();
 }
 

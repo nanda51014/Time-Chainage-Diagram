@@ -84,8 +84,23 @@ crossings, stations, tie-in points. Each marker is a chainage + label, edited
 in the **Location markers** table, and is drawn as a dashed line with a rotated
 label so you can read activities against fixed features of the route.
 
+## Dependencies & time buffers
+
+Declare that one activity must trail another by a minimum number of days in the
+**Dependencies** table (predecessor, successor, min days). Over the chainage
+range the two share, the tool checks that the successor stays at least that many
+days behind the predecessor and flags the worst point with an **amber diamond**
+(hover for the shortfall, and whether the successor overtakes). Because both
+work-fronts are linear in chainage, the tightest point is always an endpoint of
+the shared range, so the check is exact. The violation count shows as a badge by
+the section heading.
+
+Distinct from clash detection: clashes are *geometric* (any two lines crossing);
+buffer violations are *declared* sequence constraints you define.
+
 ## Roadmap / not yet implemented
 
-- Declared dependencies & minimum time/space buffers (beyond geometric clashes)
+- Minimum **space** (chainage) buffer, and dependencies involving vertical
+  (zero-length) activities such as a single structure
 - Access / possession windows and non-working calendar bands
 - P6 / MS Project (XER/XML) import

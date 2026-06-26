@@ -88,6 +88,19 @@
       <button id="addMarker" class="btn">+ Add marker</button>
     </div>
 
+    <h2>Dependencies <span id="depCount" class="badge amber" hidden>0</span></h2>
+    <div class="table-wrap">
+      <table id="depTable">
+        <thead>
+          <tr><th>Predecessor</th><th>Successor</th><th>Min days</th><th></th></tr>
+        </thead>
+        <tbody id="depBody"></tbody>
+      </table>
+    </div>
+    <div class="row-actions">
+      <button id="addDep" class="btn">+ Add dependency</button>
+    </div>
+
     <h2>Output</h2>
     <div class="row-actions">
       <button id="exportSvg" class="btn ghost">Download SVG</button>

@@ -115,3 +115,7 @@ td input[type=number] { width: 72px; }
   padding: 0 6px; font-size: 11px; font-weight: 600;
 }
 .badge[hidden] { display: none; }
+.badge.amber { background: #faad14; color: #1a1a1a; }
+
+.dep-marker { fill: #faad14; stroke: #1a1a1a; stroke-width: 1.2; cursor: pointer; }
+.dep-marker:hover { fill: #ffc53d; }
