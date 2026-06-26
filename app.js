@@ -75,7 +75,6 @@ const SAMPLE_DEPS = [
 ];
 
 const SAMPLE_MARKERS = [
-  { ch: 4400, label: 'Bridge BR-04' },
   { ch: 7200, label: 'Level crossing' },
   { ch: 9100, label: 'Rail underpass' }
 ];
@@ -85,7 +84,6 @@ const SAMPLE = [
   { name: 'Earthworks',     discipline: 'Earthworks', fromCH: 0,  toCH: 10000, start: '2026-07-20', mode: 'rate', value: 150 },
   { name: 'Drainage',       discipline: 'Drainage',  fromCH: 0,   toCH: 10000, start: '2026-09-15', mode: 'rate', value: 120 },
   { name: 'Sub-base',       discipline: 'Pavement',  fromCH: 0,   toCH: 10000, start: '2026-11-01', mode: 'rate', value: 180 },
-  { name: 'Bridge BR-04',   discipline: 'Structures', fromCH: 4200, toCH: 4600, start: '2026-08-01', mode: 'date', value: '2027-03-01' },
   { name: 'Surfacing',      discipline: 'Pavement',  fromCH: 0,   toCH: 10000, start: '2027-01-15', mode: 'rate', value: 220 }
 ];
 
