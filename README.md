@@ -77,9 +77,15 @@ Hover a marker to see which two activities clash and the chainage/date. The
 count is shown as a badge next to the toggle. This needs no extra input — it's
 derived purely from the activity geometry.
 
+## Location markers
+
+Add labelled vertical reference lines at key chainages — structures, level
+crossings, stations, tie-in points. Each marker is a chainage + label, edited
+in the **Location markers** table, and is drawn as a dashed line with a rotated
+label so you can read activities against fixed features of the route.
+
 ## Roadmap / not yet implemented
 
 - Declared dependencies & minimum time/space buffers (beyond geometric clashes)
 - Access / possession windows and non-working calendar bands
-- Location markers (structures, crossings) as labelled gridlines
 - P6 / MS Project (XER/XML) import

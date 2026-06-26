@@ -52,7 +52,15 @@ function addWorkingDays(start, workDays) {
 
 // ---------- State ----------
 let activities = [];   // {id, name, discipline, fromCH, toCH, start, mode, value, dir}
+let markers = [];      // {id, ch, label}
 let nextId = 1;
+let nextMkId = 1;
+
+const SAMPLE_MARKERS = [
+  { ch: 4400, label: 'Bridge BR-04' },
+  { ch: 7200, label: 'Level crossing' },
+  { ch: 9100, label: 'Rail underpass' }
+];
 
 const SAMPLE = [
   { name: 'Site clearance', discipline: 'Enabling', fromCH: 0,    toCH: 10000, start: '2026-07-01', mode: 'rate', value: 400 },
@@ -182,6 +190,18 @@ function render() {
 
   // axis frame
   svg.appendChild(el('rect', { x: M.left, y: M.top, width: innerW, height: innerH, fill: 'none', stroke: '#2f3b47' }));
+
+  // ----- location markers -----
+  for (const mk of markers) {
+    const ch = parseFloat(mk.ch);
+    if (isNaN(ch) || ch < Math.min(chStart, chEnd) || ch > Math.max(chStart, chEnd)) continue;
+    const x = xOf(ch);
+    svg.appendChild(el('line', { x1: x, y1: M.top, x2: x, y2: M.top + innerH, class: 'marker-line' }));
+    const t = el('text', {
+      x: x + 3, y: M.top + 4, class: 'marker-text', transform: `rotate(90 ${x + 3} ${M.top + 4})`
+    }, mk.label || formatCh(ch));
+    svg.appendChild(t);
+  }
 
   // ----- activity lines -----
   const tip = document.getElementById('tooltip');
@@ -390,6 +410,35 @@ function renderTable() {
   }
 }
 
+// ---------- markers table ----------
+function addMarker(data) {
+  markers.push({ id: nextMkId++, ch: data.ch != null ? data.ch : 0, label: data.label || 'Marker' });
+}
+function renderMarkerTable() {
+  const body = document.getElementById('mkBody');
+  body.innerHTML = '';
+  for (const mk of markers) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input data-f="ch" type="number" step="any" value="${mk.ch}" /></td>
+      <td><input data-f="label" value="${esc(mk.label)}" /></td>
+      <td><button class="del-btn" title="Delete">&times;</button></td>
+    `;
+    tr.querySelectorAll('[data-f]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const f = inp.dataset.f;
+        mk[f] = f === 'ch' ? parseFloat(inp.value) : inp.value;
+        render();
+      });
+    });
+    tr.querySelector('.del-btn').addEventListener('click', () => {
+      markers = markers.filter(m => m.id !== mk.id);
+      renderMarkerTable(); render();
+    });
+    body.appendChild(tr);
+  }
+}
+
 // ============================================================
 //  CSV import / export
 // ============================================================
@@ -517,7 +566,12 @@ function init() {
   document.getElementById('loadSample').addEventListener('click', () => {
     activities = []; nextId = 1;
     SAMPLE.forEach(addActivity);
-    renderTable(); render();
+    markers = []; nextMkId = 1;
+    SAMPLE_MARKERS.forEach(addMarker);
+    renderTable(); renderMarkerTable(); render();
+  });
+  document.getElementById('addMarker').addEventListener('click', () => {
+    addMarker({}); renderMarkerTable(); render();
   });
   document.getElementById('csvInput').addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -545,7 +599,9 @@ function init() {
 
   // start with sample data so the user sees something immediately
   SAMPLE.forEach(addActivity);
+  SAMPLE_MARKERS.forEach(addMarker);
   renderTable();
+  renderMarkerTable();
   render();
 }
 
