@@ -98,9 +98,20 @@ the section heading.
 Distinct from clash detection: clashes are *geometric* (any two lines crossing);
 buffer violations are *declared* sequence constraints you define.
 
+## Access / possession windows
+
+Mark a chainage section closed to work between two dates in the **Access
+windows** table (from/to CH, blocked-from/to dates, label) — seasonal or
+environmental closures, rail possessions, third-party access constraints. Each
+window draws as a shaded band on the diagram. Any activity whose work-front
+passes through the band during its blocked period is flagged: the band turns
+red, a square marker is placed on the offending activity, and a count badge
+shows by the heading. Hover the band to list intruding activities, or a marker
+to see which activity and window.
+
 ## Roadmap / not yet implemented
 
 - Minimum **space** (chainage) buffer, and dependencies involving vertical
   (zero-length) activities such as a single structure
-- Access / possession windows and non-working calendar bands
+- Non-working calendar bands (weekends/holidays) drawn across the whole chart
 - P6 / MS Project (XER/XML) import

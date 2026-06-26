@@ -54,9 +54,17 @@ function addWorkingDays(start, workDays) {
 let activities = [];   // {id, name, discipline, fromCH, toCH, start, mode, value, dir}
 let markers = [];      // {id, ch, label}
 let deps = [];         // {id, predId, succId, minDays}
+let windows = [];      // {id, fromCH, toCH, start, end, label}
 let nextId = 1;
 let nextMkId = 1;
 let nextDepId = 1;
+let nextWinId = 1;
+
+// sample blocked window: env. closure CH 6+000–8+000, 1 Dec 2026–28 Feb 2027.
+// Catches Sub-base (~early Dec) and Surfacing (~mid Feb) working through it.
+const SAMPLE_WINDOWS = [
+  { fromCH: 6000, toCH: 8000, start: '2026-12-01', end: '2027-02-28', label: 'Env. closure' }
+];
 
 // sample dependencies declared by activity name; resolved to ids on load.
 // Earthworks→Drainage is a near-miss (57 d gap vs 60 required) to show a
@@ -151,6 +159,39 @@ function evalDeps(sched) {
   return out;
 }
 
+// Evaluate blocked access windows. An activity intrudes when it occupies a
+// chainage inside the window's chainage range at a date inside its blocked
+// period. Date is linear in chainage, so the activity's dates over the shared
+// chainage range form an interval — intrusion is an interval overlap test.
+function evalWindows(sched) {
+  const out = [];
+  for (const w of windows) {
+    const wFrom = Math.min(+w.fromCH, +w.toCH), wTo = Math.max(+w.fromCH, +w.toCH);
+    const ws = parseDate(w.start), we = parseDate(w.end);
+    if (isNaN(wFrom) || isNaN(wTo) || !ws || !we || we < ws) { out.push({ w, intruders: [] }); continue; }
+    const intruders = [];
+    for (const r of sched) {
+      const aFrom = Math.min(r.fromCH, r.toCH), aTo = Math.max(r.fromCH, r.toCH);
+      const lo = Math.max(wFrom, aFrom), hi = Math.min(wTo, aTo);
+      if (lo > hi) continue; // no chainage overlap
+      if (r.toCH === r.fromCH) {
+        // vertical activity: single chainage, spans [start, finish] in time
+        if (r.finish < ws || r.start > we) continue;
+        const mid = new Date((Math.max(r.start, ws).getTime() + Math.min(r.finish, we).getTime()) / 2);
+        intruders.push({ act: r, ch: r.fromCH, date: mid });
+        continue;
+      }
+      const a = dateAtCh(r, lo), b = dateAtCh(r, hi);
+      const d1 = a < b ? a : b, d2 = a < b ? b : a;
+      if (d2 < ws || d1 > we) continue; // time intervals don't overlap
+      const midCh = (lo + hi) / 2;
+      intruders.push({ act: r, ch: midCh, date: dateAtCh(r, midCh) });
+    }
+    out.push({ w, wFrom, wTo, ws, we, intruders });
+  }
+  return out;
+}
+
 // ============================================================
 //  Rendering
 // ============================================================
@@ -239,6 +280,41 @@ function render() {
 
   // axis frame
   svg.appendChild(el('rect', { x: M.left, y: M.top, width: innerW, height: innerH, fill: 'none', stroke: '#2f3b47' }));
+
+  // ----- access windows (blocked bands, drawn behind activities) -----
+  const tipEl = document.getElementById('tooltip');
+  const winResults = evalWindows(sched);
+  for (const wr of winResults) {
+    if (!wr.ws) continue; // invalid window, nothing to draw
+    const x = Math.min(xOf(wr.wFrom), xOf(wr.wTo));
+    const wpx = Math.abs(xOf(wr.wTo) - xOf(wr.wFrom));
+    const yA = yOf(wr.ws), yB = yOf(wr.we);
+    const y = Math.min(yA, yB), hpx = Math.abs(yB - yA);
+    const bad = wr.intruders.length > 0;
+    const rect = el('rect', {
+      x, y, width: wpx, height: hpx,
+      class: 'window-band' + (bad ? ' bad' : '')
+    });
+    rect.addEventListener('mousemove', (ev) => {
+      const host = document.getElementById('chartHost').getBoundingClientRect();
+      tipEl.hidden = false;
+      tipEl.style.left = (ev.clientX - host.left + 14) + 'px';
+      tipEl.style.top = (ev.clientY - host.top + 14) + 'px';
+      const names = wr.intruders.map(i => esc(i.act.name)).join(', ');
+      tipEl.innerHTML =
+        `<b>${esc(wr.w.label || 'Blocked window')}</b><br>` +
+        `CH ${formatCh(wr.wFrom)}–${formatCh(wr.wTo)}<br>` +
+        `${fmtDate(wr.ws)} → ${fmtDate(wr.we)}<br>` +
+        (bad ? `⚠ intruding: ${names}` : 'no activities inside');
+    });
+    rect.addEventListener('mouseleave', () => { tipEl.hidden = true; });
+    svg.appendChild(rect);
+    if (wr.w.label) {
+      svg.appendChild(el('text', {
+        x: x + wpx / 2, y: y + 12, class: 'window-text', 'text-anchor': 'middle'
+      }, wr.w.label));
+    }
+  }
 
   // ----- location markers -----
   for (const mk of markers) {
@@ -349,6 +425,30 @@ function render() {
   const depBadge = document.getElementById('depCount');
   depBadge.textContent = viols.length;
   depBadge.hidden = viols.length === 0;
+
+  // ----- access-window intrusion markers (on top of activities) -----
+  let winN = 0;
+  for (const wr of winResults) {
+    for (const it of wr.intruders) {
+      winN++;
+      const x = xOf(it.ch), y = yOf(it.date), s = 5;
+      const m = el('rect', { x: x - s, y: y - s, width: 2 * s, height: 2 * s, class: 'window-marker' });
+      m.addEventListener('mousemove', (ev) => {
+        const host = document.getElementById('chartHost').getBoundingClientRect();
+        tip.hidden = false;
+        tip.style.left = (ev.clientX - host.left + 14) + 'px';
+        tip.style.top = (ev.clientY - host.top + 14) + 'px';
+        tip.innerHTML =
+          `<b>⛔ Works in blocked window</b><br>${esc(it.act.name)}<br>` +
+          `inside “${esc(wr.w.label || 'window')}” near CH ${formatCh(it.ch)}`;
+      });
+      m.addEventListener('mouseleave', () => { tip.hidden = true; });
+      svg.appendChild(m);
+    }
+  }
+  const winBadge = document.getElementById('winCount');
+  winBadge.textContent = winN;
+  winBadge.hidden = winN === 0;
 
   // ----- legend -----
   const discs = Object.keys(disciplineColors);
@@ -565,6 +665,45 @@ function resolveSampleDep(sd) {
   if (predId && succId) addDep({ predId, succId, minDays: sd.minDays });
 }
 
+// ---------- access windows table ----------
+function addWindow(data) {
+  windows.push({
+    id: nextWinId++,
+    fromCH: data.fromCH != null ? data.fromCH : 0,
+    toCH: data.toCH != null ? data.toCH : 1000,
+    start: data.start || '',
+    end: data.end || '',
+    label: data.label || 'Blocked'
+  });
+}
+function renderWindowTable() {
+  const body = document.getElementById('winBody');
+  body.innerHTML = '';
+  for (const w of windows) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input data-f="fromCH" type="number" step="any" value="${w.fromCH}" /></td>
+      <td><input data-f="toCH" type="number" step="any" value="${w.toCH}" /></td>
+      <td><input data-f="start" type="date" value="${w.start}" /></td>
+      <td><input data-f="end" type="date" value="${w.end}" /></td>
+      <td><input data-f="label" value="${esc(w.label)}" /></td>
+      <td><button class="del-btn" title="Delete">&times;</button></td>
+    `;
+    tr.querySelectorAll('[data-f]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const f = inp.dataset.f;
+        w[f] = (f === 'fromCH' || f === 'toCH') ? parseFloat(inp.value) : inp.value;
+        render();
+      });
+    });
+    tr.querySelector('.del-btn').addEventListener('click', () => {
+      windows = windows.filter(x => x.id !== w.id);
+      renderWindowTable(); render();
+    });
+    body.appendChild(tr);
+  }
+}
+
 // ============================================================
 //  CSV import / export
 // ============================================================
@@ -696,13 +835,18 @@ function init() {
     SAMPLE_MARKERS.forEach(addMarker);
     deps = []; nextDepId = 1;
     SAMPLE_DEPS.forEach(resolveSampleDep);
-    renderTable(); renderMarkerTable(); renderDepTable(); render();
+    windows = []; nextWinId = 1;
+    SAMPLE_WINDOWS.forEach(addWindow);
+    renderTable(); renderMarkerTable(); renderDepTable(); renderWindowTable(); render();
   });
   document.getElementById('addMarker').addEventListener('click', () => {
     addMarker({}); renderMarkerTable(); render();
   });
   document.getElementById('addDep').addEventListener('click', () => {
     addDep({}); renderDepTable(); render();
+  });
+  document.getElementById('addWindow').addEventListener('click', () => {
+    addWindow({}); renderWindowTable(); render();
   });
   document.getElementById('csvInput').addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -734,9 +878,11 @@ function init() {
   SAMPLE.forEach(addActivity);
   SAMPLE_MARKERS.forEach(addMarker);
   SAMPLE_DEPS.forEach(resolveSampleDep);
+  SAMPLE_WINDOWS.forEach(addWindow);
   renderTable();
   renderMarkerTable();
   renderDepTable();
+  renderWindowTable();
   render();
 }
 

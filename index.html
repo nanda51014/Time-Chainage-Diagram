@@ -101,6 +101,21 @@
       <button id="addDep" class="btn">+ Add dependency</button>
     </div>
 
+    <h2>Access windows <span id="winCount" class="badge" hidden>0</span></h2>
+    <div class="table-wrap">
+      <table id="winTable">
+        <thead>
+          <tr><th>From CH</th><th>To CH</th><th>Blocked from</th><th>Blocked to</th><th>Label</th><th></th></tr>
+        </thead>
+        <tbody id="winBody"></tbody>
+      </table>
+    </div>
+    <div class="row-actions">
+      <button id="addWindow" class="btn">+ Add window</button>
+    </div>
+    <p class="hint">A blocked window marks a chainage section closed to work between two dates
+      (seasonal/environmental closures, possessions). Activities working inside one are flagged.</p>
+
     <h2>Output</h2>
     <div class="row-actions">
       <button id="exportSvg" class="btn ghost">Download SVG</button>

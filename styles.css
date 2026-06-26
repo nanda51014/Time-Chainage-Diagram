@@ -119,3 +119,11 @@ td input[type=number] { width: 72px; }
 
 .dep-marker { fill: #faad14; stroke: #1a1a1a; stroke-width: 1.2; cursor: pointer; }
 .dep-marker:hover { fill: #ffc53d; }
+
+.window-band { fill: rgba(139,151,164,.10); stroke: #5a6b7a; stroke-width: 1; stroke-dasharray: 5 3; cursor: pointer; }
+.window-band.bad { fill: rgba(255,77,79,.12); stroke: #ff4d4f; stroke-dasharray: none; }
+.window-band:hover { fill: rgba(139,151,164,.18); }
+.window-band.bad:hover { fill: rgba(255,77,79,.20); }
+.window-text { fill: var(--muted); font-size: 10px; }
+.window-marker { fill: #ff4d4f; stroke: #fff; stroke-width: 1.5; cursor: pointer; }
+.window-marker:hover { fill: #ff7875; }
