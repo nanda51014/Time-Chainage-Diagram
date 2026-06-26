@@ -8,6 +8,15 @@ Each activity is drawn as a line on a **chainage (horizontal)** vs. **time (vert
 grid. The slope of the line is the production rate: steeper = slower, flatter = faster.
 Where lines converge, work-fronts are about to clash in space and time.
 
+## Live demo
+
+Once GitHub Pages is enabled (Settings → Pages → deploy from `main`, root folder),
+the tool is available at:
+
+```
+https://nanda51014.github.io/Time-Chainage-Diagram/
+```
+
 ## Run it
 
 No build step, no server needed. Just open `index.html` in a browser:
