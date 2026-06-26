@@ -185,10 +185,12 @@ function render() {
 
   // ----- activity lines -----
   const tip = document.getElementById('tooltip');
+  const segs = []; // captured for clash detection
   for (const r of sched) {
     const color = colorFor(r.discipline);
     const x1 = xOf(r.fromCH), x2 = xOf(r.toCH);
     const y1 = yOf(r.start), y2 = yOf(r.finish);
+    segs.push({ r, x1, y1, x2, y2 });
     const line = el('line', { x1, y1, x2, y2, class: 'act-line', stroke: color });
     const lengthCh = Math.abs(r.toCH - r.fromCH);
     const days = diffDays(r.start, r.finish) || 1;
@@ -211,6 +213,44 @@ function render() {
     const lx = (x1 + x2) / 2, ly = (y1 + y2) / 2;
     svg.appendChild(el('text', { x: lx, y: ly - 6, class: 'act-label', 'text-anchor': 'middle' }, r.name));
   }
+
+  // ----- clash detection -----
+  // Two activities clash when they occupy the same chainage at the same time,
+  // i.e. their lines cross. Axes are affine + monotonic, so a screen-space
+  // segment intersection corresponds exactly to a data-space clash.
+  const showClashes = document.getElementById('showClashes').checked;
+  const chOf = x => chStart + ((x - M.left) / innerW) * chSpan;
+  const dateOf = y => {
+    const frac = timeDir === 'down' ? (y - M.top) / innerH : 1 - (y - M.top) / innerH;
+    return addDays(tMin, frac * totalDays);
+  };
+  let clashN = 0;
+  if (showClashes) {
+    for (let i = 0; i < segs.length; i++) {
+      for (let j = i + 1; j < segs.length; j++) {
+        const p = segIntersect(segs[i], segs[j]);
+        if (!p) continue;
+        clashN++;
+        const a = segs[i].r, b = segs[j].r;
+        const ch = chOf(p.x), date = dateOf(p.y);
+        const marker = el('circle', { cx: p.x, cy: p.y, r: 6, class: 'clash-marker' });
+        marker.addEventListener('mousemove', (ev) => {
+          const host = document.getElementById('chartHost').getBoundingClientRect();
+          tip.hidden = false;
+          tip.style.left = (ev.clientX - host.left + 14) + 'px';
+          tip.style.top = (ev.clientY - host.top + 14) + 'px';
+          tip.innerHTML =
+            `<b>⚠ Clash</b><br>${esc(a.name)} × ${esc(b.name)}<br>` +
+            `at CH ${formatCh(ch)} on ${fmtDate(date)}`;
+        });
+        marker.addEventListener('mouseleave', () => { tip.hidden = true; });
+        svg.appendChild(marker);
+      }
+    }
+  }
+  const badge = document.getElementById('clashCount');
+  badge.textContent = clashN;
+  badge.hidden = !(showClashes && clashN > 0);
 
   // ----- legend -----
   const discs = Object.keys(disciplineColors);
@@ -281,6 +321,21 @@ function fmtTimeTick(d, step) {
 }
 function esc(s) {
   return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+// Intersection point of two line segments a,b ({x1,y1,x2,y2}); null if they
+// don't cross within both segments. Endpoint-only touches are ignored so that
+// activities merely meeting at a shared chainage/date aren't flagged.
+function segIntersect(a, b) {
+  const r_x = a.x2 - a.x1, r_y = a.y2 - a.y1;
+  const s_x = b.x2 - b.x1, s_y = b.y2 - b.y1;
+  const denom = r_x * s_y - r_y * s_x;
+  if (Math.abs(denom) < 1e-9) return null; // parallel / collinear
+  const qp_x = b.x1 - a.x1, qp_y = b.y1 - a.y1;
+  const t = (qp_x * s_y - qp_y * s_x) / denom;
+  const u = (qp_x * r_y - qp_y * r_x) / denom;
+  const eps = 1e-6;
+  if (t <= eps || t >= 1 - eps || u <= eps || u >= 1 - eps) return null;
+  return { x: a.x1 + t * r_x, y: a.y1 + t * r_y };
 }
 
 // ============================================================
@@ -483,7 +538,7 @@ function init() {
   document.getElementById('exportSvg').addEventListener('click', exportSvg);
   document.getElementById('exportPng').addEventListener('click', exportPng);
 
-  ['projStart', 'timeDir', 'chStart', 'chEnd', 'chUnits', 'skipWeekends'].forEach(id => {
+  ['projStart', 'timeDir', 'chStart', 'chEnd', 'chUnits', 'skipWeekends', 'showClashes'].forEach(id => {
     document.getElementById(id).addEventListener('input', render);
   });
   window.addEventListener('resize', render);

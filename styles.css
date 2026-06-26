@@ -106,3 +106,12 @@ td input[type=number] { width: 72px; }
 .marker-line { stroke: #3a4a5a; stroke-dasharray: 4 3; stroke-width: 1; }
 .marker-text { fill: var(--muted); font-size: 9px; }
 .chart-title { fill: var(--text); font-size: 14px; font-weight: 600; }
+.clash-marker { fill: #ff4d4f; stroke: #fff; stroke-width: 1.5; cursor: pointer; }
+.clash-marker:hover { fill: #ff7875; }
+
+.badge {
+  display: inline-block; min-width: 16px; text-align: center;
+  background: #ff4d4f; color: #fff; border-radius: 9px;
+  padding: 0 6px; font-size: 11px; font-weight: 600;
+}
+.badge[hidden] { display: none; }

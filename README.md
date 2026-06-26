@@ -69,9 +69,17 @@ header is present, columns are read positionally in the order above.
 - **Download PNG** — 2× raster for documents/presentations.
 - **Export CSV** — round-trip your activity table.
 
+## Clash detection
+
+With **Flag clashes** ticked, the tool marks every point where two activities
+occupy the same chainage at the same time (their lines cross) with a red dot.
+Hover a marker to see which two activities clash and the chainage/date. The
+count is shown as a badge next to the toggle. This needs no extra input — it's
+derived purely from the activity geometry.
+
 ## Roadmap / not yet implemented
 
-- Dependencies & buffers between activities (clash validation)
+- Declared dependencies & minimum time/space buffers (beyond geometric clashes)
 - Access / possession windows and non-working calendar bands
 - Location markers (structures, crossings) as labelled gridlines
 - P6 / MS Project (XER/XML) import
