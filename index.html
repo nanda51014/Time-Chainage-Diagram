@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Time-Chainage Diagram Tool</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="app-header">
+  <h1>Time&ndash;Chainage Diagram</h1>
+  <p class="subtitle">Linear schedule plotter for infrastructure construction</p>
+</header>
+
+<main class="layout">
+  <!-- ============ CONTROL PANEL ============ -->
+  <section class="panel" id="controls">
+    <h2>Project</h2>
+    <div class="grid2">
+      <label>Project start
+        <input type="date" id="projStart" />
+      </label>
+      <label>Time axis runs
+        <select id="timeDir">
+          <option value="down">Top &rarr; bottom (forward)</option>
+          <option value="up">Bottom &rarr; top</option>
+        </select>
+      </label>
+      <label>Chainage start
+        <input type="number" id="chStart" value="0" step="any" />
+      </label>
+      <label>Chainage end
+        <input type="number" id="chEnd" value="10000" step="any" />
+      </label>
+      <label>Units
+        <select id="chUnits">
+          <option value="m">metres (m)</option>
+          <option value="km">kilometres (km)</option>
+        </select>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="skipWeekends" />
+        Rate uses working days (skip weekends)
+      </label>
+    </div>
+
+    <h2>Activities</h2>
+    <div class="table-wrap">
+      <table id="actTable">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Discipline</th>
+            <th>From CH</th>
+            <th>To CH</th>
+            <th>Start</th>
+            <th>Mode</th>
+            <th>Rate / End</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="actBody"></tbody>
+      </table>
+    </div>
+    <div class="row-actions">
+      <button id="addRow" class="btn">+ Add activity</button>
+      <button id="loadSample" class="btn ghost">Load sample</button>
+      <label class="btn ghost file-btn">
+        Import CSV<input type="file" id="csvInput" accept=".csv" hidden />
+      </label>
+      <button id="exportCsv" class="btn ghost">Export CSV</button>
+    </div>
+
+    <h2>Output</h2>
+    <div class="row-actions">
+      <button id="exportSvg" class="btn ghost">Download SVG</button>
+      <button id="exportPng" class="btn ghost">Download PNG</button>
+    </div>
+    <p class="hint">
+      Rate mode: enter production rate (CH-units per day) &mdash; finish is computed.
+      Date mode: enter the finish date directly.
+    </p>
+  </section>
+
+  <!-- ============ DIAGRAM ============ -->
+  <section class="panel diagram-panel">
+    <div id="chartHost"></div>
+    <div id="tooltip" class="tooltip" hidden></div>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

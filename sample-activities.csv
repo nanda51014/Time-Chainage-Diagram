@@ -1,0 +1,7 @@
+name,discipline,fromCH,toCH,start,mode,value
+Site clearance,Enabling,0,10000,2026-07-01,rate,400
+Earthworks,Earthworks,0,10000,2026-07-20,rate,150
+Drainage,Drainage,0,10000,2026-09-15,rate,120
+Sub-base,Pavement,0,10000,2026-11-01,rate,180
+Bridge BR-04,Structures,4200,4600,2026-08-01,date,2027-03-01
+Surfacing,Pavement,0,10000,2027-01-15,rate,220
