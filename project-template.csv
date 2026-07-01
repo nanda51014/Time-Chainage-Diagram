@@ -1,0 +1,30 @@
+#PROJECT
+key,value
+start,2026-07-01
+chStart,0
+chEnd,10000
+units,m
+timeDir,down
+skipWeekends,false
+
+#ACTIVITIES
+name,discipline,fromCH,toCH,start,mode,value
+Site clearance,Enabling,0,10000,2026-07-01,rate,400
+Earthworks,Earthworks,0,10000,2026-07-20,rate,150
+Drainage,Drainage,0,10000,2026-09-15,rate,120
+Sub-base,Pavement,0,10000,2026-11-01,rate,180
+Surfacing,Pavement,0,10000,2027-01-15,rate,220
+
+#MARKERS
+ch,label
+7200,Level crossing
+9100,Rail underpass
+
+#DEPENDENCIES
+predecessor,successor,minDays
+Earthworks,Drainage,60
+Sub-base,Surfacing,14
+
+#WINDOWS
+fromCH,toCH,start,end,label
+6000,8000,2026-12-01,2027-02-28,Env. closure

@@ -750,15 +750,126 @@ function splitCsvLine(line) {
   out.push(cur);
   return out;
 }
+function csvCell(v) {
+  v = v == null ? '' : String(v);
+  return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+}
 function toCSV() {
   const lines = [CSV_COLS.join(',')];
-  for (const a of activities) {
-    lines.push(CSV_COLS.map(c => {
-      const v = a[c] == null ? '' : String(a[c]);
-      return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
-    }).join(','));
-  }
+  for (const a of activities) lines.push(CSV_COLS.map(c => csvCell(a[c])).join(','));
   return lines.join('\n');
+}
+
+// ---------- project sheet (single multi-section file) ----------
+// A project sheet holds every input in one file. Sections start with a line
+// beginning "#": #PROJECT, #ACTIVITIES, #MARKERS, #DEPENDENCIES, #WINDOWS.
+// Each section has its own header row then data rows. Returns a {SECTION: [
+// lines...]} map, or null if the text has no section markers (so a plain flat
+// activities CSV still imports via the legacy path).
+function parseProjectSheet(text) {
+  const lines = text.split(/\r?\n/);
+  if (!lines.some(l => /^\s*#/.test(l))) return null;
+  const sections = {};
+  let cur = null;
+  for (const line of lines) {
+    const t = line.trim();
+    if (t === '') continue;
+    if (t.startsWith('#')) { cur = t.slice(1).trim().toUpperCase(); sections[cur] = []; continue; }
+    if (cur) sections[cur].push(line);
+  }
+  return sections;
+}
+function tableize(sectionLines) {
+  if (!sectionLines || !sectionLines.length) return { header: [], rows: [] };
+  const header = splitCsvLine(sectionLines[0]).map(h => h.trim().toLowerCase());
+  const rows = sectionLines.slice(1).map(splitCsvLine);
+  return { header, rows };
+}
+function colIndexer(header, names) {
+  const ci = {};
+  names.forEach((n, i) => { const p = header.indexOf(n); ci[n] = p === -1 ? i : p; });
+  return ci;
+}
+function applyProjectSettings(m) {
+  const set = (id, val) => { if (val != null && val !== '') document.getElementById(id).value = val; };
+  set('projStart', m.start != null ? m.start : m.projstart);
+  set('chStart', m.chstart);
+  set('chEnd', m.chend);
+  if (m.units) document.getElementById('chUnits').value = m.units;
+  if (m.timedir) document.getElementById('timeDir').value = m.timedir;
+  if (m.skipweekends != null) {
+    document.getElementById('skipWeekends').checked = /^(true|yes|1)$/i.test(m.skipweekends);
+  }
+}
+function applyProjectSheet(sections) {
+  // PROJECT — key,value pairs
+  if (sections.PROJECT) {
+    const map = {};
+    tableize(sections.PROJECT).rows.forEach(r => {
+      const k = (r[0] || '').trim().toLowerCase();
+      if (k && k !== 'key') map[k] = (r[1] || '').trim();
+    });
+    applyProjectSettings(map);
+  }
+  // ACTIVITIES — reuse the flat CSV parser
+  activities = []; nextId = 1;
+  if (sections.ACTIVITIES) parseCSV(sections.ACTIVITIES.join('\n')).forEach(addActivity);
+  // MARKERS
+  markers = []; nextMkId = 1;
+  if (sections.MARKERS) {
+    const { header, rows } = tableize(sections.MARKERS);
+    const ci = colIndexer(header, ['ch', 'label']);
+    rows.forEach(r => addMarker({ ch: parseFloat(r[ci.ch]), label: (r[ci.label] || '').trim() }));
+  }
+  // WINDOWS
+  windows = []; nextWinId = 1;
+  if (sections.WINDOWS) {
+    const { header, rows } = tableize(sections.WINDOWS);
+    const ci = colIndexer(header, ['fromch', 'toch', 'start', 'end', 'label']);
+    rows.forEach(r => addWindow({
+      fromCH: parseFloat(r[ci.fromch]), toCH: parseFloat(r[ci.toch]),
+      start: (r[ci.start] || '').trim(), end: (r[ci.end] || '').trim(),
+      label: (r[ci.label] || '').trim()
+    }));
+  }
+  // DEPENDENCIES — declared by activity name, resolved after activities load
+  deps = []; nextDepId = 1;
+  if (sections.DEPENDENCIES) {
+    const { header, rows } = tableize(sections.DEPENDENCIES);
+    const ci = colIndexer(header, ['predecessor', 'successor', 'mindays']);
+    rows.forEach(r => {
+      const pred = activities.find(a => a.name === (r[ci.predecessor] || '').trim());
+      const succ = activities.find(a => a.name === (r[ci.successor] || '').trim());
+      if (pred && succ) addDep({ predId: pred.id, succId: succ.id, minDays: parseFloat(r[ci.mindays]) });
+    });
+  }
+  renderTable(); renderMarkerTable(); renderDepTable(); renderWindowTable(); render();
+}
+function exportProjectSheet() {
+  const q = id => document.getElementById(id);
+  const L = [];
+  L.push('#PROJECT', 'key,value',
+    'start,' + q('projStart').value,
+    'chStart,' + q('chStart').value,
+    'chEnd,' + q('chEnd').value,
+    'units,' + q('chUnits').value,
+    'timeDir,' + q('timeDir').value,
+    'skipWeekends,' + q('skipWeekends').checked, '');
+  L.push('#ACTIVITIES', CSV_COLS.join(','));
+  activities.forEach(a => L.push(CSV_COLS.map(c => csvCell(a[c])).join(',')));
+  L.push('');
+  L.push('#MARKERS', 'ch,label');
+  markers.forEach(m => L.push([m.ch, csvCell(m.label)].join(',')));
+  L.push('');
+  L.push('#DEPENDENCIES', 'predecessor,successor,minDays');
+  deps.forEach(d => {
+    const p = activities.find(a => a.id === d.predId), s = activities.find(a => a.id === d.succId);
+    if (p && s) L.push([csvCell(p.name), csvCell(s.name), d.minDays].join(','));
+  });
+  L.push('');
+  L.push('#WINDOWS', 'fromCH,toCH,start,end,label');
+  windows.forEach(w => L.push([w.fromCH, w.toCH, w.start, w.end, csvCell(w.label)].join(',')));
+  download('time-chainage-project.csv', new Blob([L.join('\n')], { type: 'text/csv' }));
 }
 
 // ============================================================
@@ -851,12 +962,18 @@ function init() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      const rows = parseCSV(reader.result);
-      activities = []; nextId = 1;
-      rows.forEach(addActivity);
-      deps = deps.filter(d =>
-        activities.some(a => a.id === d.predId) && activities.some(a => a.id === d.succId));
-      renderTable(); renderDepTable(); render();
+      const sections = parseProjectSheet(reader.result);
+      if (sections) {
+        // full project sheet — replaces the whole project
+        applyProjectSheet(sections);
+      } else {
+        // legacy flat activities CSV — replaces activities only
+        activities = []; nextId = 1;
+        parseCSV(reader.result).forEach(addActivity);
+        deps = deps.filter(d =>
+          activities.some(a => a.id === d.predId) && activities.some(a => a.id === d.succId));
+        renderTable(); renderDepTable(); render();
+      }
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -864,6 +981,7 @@ function init() {
   document.getElementById('exportCsv').addEventListener('click', () => {
     download('activities.csv', new Blob([toCSV()], { type: 'text/csv' }));
   });
+  document.getElementById('exportSheet').addEventListener('click', exportProjectSheet);
   document.getElementById('exportSvg').addEventListener('click', exportSvg);
   document.getElementById('exportPng').addEventListener('click', exportPng);
 
